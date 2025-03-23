@@ -1,37 +1,38 @@
 import { AgentFunction, AgentFunctionInfo, assert } from "graphai";
-import type { GraphAIBaseDirName, GraphAIFilePattern, GraphAIFileName, GraphAIOutputType, GraphAIArray, GraphAIData } from "@graphai/agent_utils";
+import type { GraphAIBaseDirName, GraphAIFileName, GraphAIText, GraphAIArray, GraphAIData } from "@graphai/agent_utils";
 
 import path from "path";
 import glob from "glob";
 
 export const globAgent: AgentFunction<
   GraphAIBaseDirName,
-  GraphAIBaseDirName & GraphAIArray<GraphAIFileName>,
-  GraphAIFilePattern
+  GraphAIArray<GraphAIFileName>,
+  GraphAIText
 > = async ({ namedInputs, params }) => {
-    const { baseDir } = params;
+    const baseDir = path.normalize(params.baseDir);
 
-    assert(!!baseDir, "fileReadAgent: params.baseDir is UNDEFINED!");
+    assert(!!baseDir, "globAgent: params.baseDir is UNDEFINED!");
 
     const globFiles = (pattern: string) => {
       const fullPattern = path.join(baseDir, pattern);
-      return glob.sync(fullPattern) as GraphAIArray<GraphAIFileName>
-    }
 
-    if (namedInputs.pattern) {
-      return {
-        baseDir: baseDir,
-        array: globFiles(namedInputs.pattern),
-      };
+      return glob.sync(fullPattern).map(file => {
+        // Use path.relative which handles cross-platform path differences properly
+        return { file: path.relative(baseDir, file) };
+      });
+    };
+
+    if (namedInputs.text) {
+      return { array: globFiles(namedInputs.text) };
     }
     throw new Error("globAgent no pattern");
   };
 
-const sampleInput1 = { pattern: "*.txt" };
-const sampleInput2 = { pattern: "test.*" };
+const sampleInput1 = { text: "**/test.txt" };
+const sampleInput2 = { text: "**/test.*" };
 const sampleParams = { baseDir: __dirname + "/../../tests/files/" };
-const sampleResult1 = { baseDir: __dirname + "/../../tests/files/", array: ["test.txt"] };
-const sampleResult2 = { baseDir: __dirname + "/../../tests/files/", array: ["test.m4a", "test.txt"] }
+const sampleResult1 = { array: [{file: "test.txt"}] };
+const sampleResult2 = { array: [{file: "test.m4a"}, {file: "test.txt"}] };
 
 const globAgentInfo: AgentFunctionInfo = {
   name: "globAgent",
@@ -40,7 +41,7 @@ const globAgentInfo: AgentFunctionInfo = {
   inputs: {
     type: "object",
     properties: {
-      pattern: {
+      text: {
         type: "string",
         description: "base directory name",
       }
@@ -49,9 +50,6 @@ const globAgentInfo: AgentFunctionInfo = {
   output: {
     type: "object",
     properties: {
-      baseDir: {
-        type: "string",
-      },
       array: {
         type: "array"
       }
